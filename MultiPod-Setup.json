@@ -1,0 +1,403 @@
+{
+	"variables": [],
+	"info": {
+		"name": "MultiPod Setup",
+		"_postman_id": "4f4ada19-f08b-cd7f-2c71-823dfa773c15",
+		"description": "1.4 fixed backup script\n1.3 added backup script\n1.2 fixed RR config (now all 4 spines are RRs)\n1.1 fixed the l3 physical domain setting\n1.0 first release",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "6_Configure L3 Interface",
+			"description": "",
+			"item": [
+				{
+					"name": "Create VLAN Pool",
+					"request": {
+						"url": "https://172.26.42.21/api/node/mo/uni.xml",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<!-- VLAN POOL TO BE USED FOR SPINE TO IPN SUBINTERFACES - VLAN 4 MUST BE USED  -->\n<infraInfra>\n         <fvnsVlanInstP name=\"MultiPod_vlanPool\" allocMode=\"static\">\n            <fvnsEncapBlk name=\"encap\" from=\"vlan-4\" to=\"vlan-4\"/>\n         </fvnsVlanInstP>\n</infraInfra>\n"
+						},
+						"description": ""
+					},
+					"response": []
+				},
+				{
+					"name": "Create L3 Phy Domain",
+					"request": {
+						"url": "https://172.26.42.21/api/node/mo/uni.xml",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<!-- CREATE EXTERNAL L3 DOMAIN TO MARRY THE VLAN POOL  -->\n<l3extDomP name=\"MultiPod_ExtL3Dom\">\n    <infraRsVlanNs tDn=\"uni/infra/vlanns-[MultiPod_vlanPool]-static\"/>\n</l3extDomP>"
+						},
+						"description": ""
+					},
+					"response": []
+				},
+				{
+					"name": "Create IPN AAEP",
+					"request": {
+						"url": "https://172.26.42.21/api/node/mo/uni.xml",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<!-- CREATE AAEP THAT BINDS THE L3 EXTERNAL DOMAIN  -->\n<polUni>\n<infraInfra>\n    <infraAttEntityP name=\"MultiPod_AAEP\" >\n        <infraRsDomP tDn=\"uni/l3dom-MultiPod_ExtL3Dom\"/>\n    </infraAttEntityP>\n</infraInfra>\n</polUni>"
+						},
+						"description": ""
+					},
+					"response": []
+				},
+				{
+					"name": "40G_LLPolicy",
+					"request": {
+						"url": "https://172.26.42.21/api/node/mo/uni.xml",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<!-- CREATES A 40G LINK POLICY - THIS WILL BE USED ON THE LINKS FROM THE SPINE TO THE IPN  -->\n<fabricHIfPol autoNeg=\"on\" descr=\"\" dn=\"uni/infra/hintfpol-40G\" fecMode=\"inherit\" linkDebounce=\"100\" name=\"40G\" ownerKey=\"\" ownerTag=\"\" speed=\"40G\"/>"
+						},
+						"description": ""
+					},
+					"response": []
+				},
+				{
+					"name": "CDP_IntPolicy",
+					"request": {
+						"url": "https://172.26.42.21/api/node/mo/uni.xml",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<!-- CREATES A CDP POLICY - ENABLE CDP ON THE LINKS USED TO THE IPN  -->\n<cdpIfPol ownerTag=\"\" ownerKey=\"\" name=\"CDP_Enable\" dn=\"uni/infra/cdpIfP-CDP_Enable\" descr=\"\" adminSt=\"enabled\"/>"
+						},
+						"description": ""
+					},
+					"response": []
+				},
+				{
+					"name": "Interface_PolicyGroup",
+					"request": {
+						"url": "https://172.26.42.21/api/node/mo/uni.xml",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<!-- CREATES A INTERFACE POLICY GROUP AND MARRIES THE PREVIOUS 40G AND CDP_ENABLE POLICIES WITH THE MULTIPOD AAEP  -->\n  <infraSpAccPortGrp descr=\"\" dn=\"uni/infra/funcprof/spaccportgrp-SpineIPN_IntPolicyGroup\" name=\"SpineIPN_IntPolicyGroup\" ownerKey=\"\" ownerTag=\"\">\n    <infraRsCdpIfPol tnCdpIfPolName=\"CDP_Enable\"/>\n    <infraRsAttEntP tDn=\"uni/infra/attentp-MultiPod_AAEP\"/>\n    <infraRsHIfPol tnFabricHIfPolName=\"40G\"/>\n  </infraSpAccPortGrp>"
+						},
+						"description": ""
+					},
+					"response": []
+				},
+				{
+					"name": "Interface_Profile",
+					"request": {
+						"url": "https://172.26.42.21/api/node/mo/uni.xml",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<!-- SELECT THE INTERFACES TO APPLY THE POLICY GROUP - THESE INTERFACES ARE THOSE FACING THE IPN - WE USE MODULE 1 PORT 15 -->\n  <infraSpAccPortP descr=\"\" dn=\"uni/infra/spaccportprof-SpineIPN_IntProfile\" name=\"SpineIPN_IntProfile\" ownerKey=\"\" ownerTag=\"\">\n    <infraSHPortS descr=\"\" name=\"Interface\" ownerKey=\"\" ownerTag=\"\" type=\"range\">\n      <infraPortBlk descr=\"\" fromCard=\"1\" fromPort=\"15\" name=\"block2\" toCard=\"1\" toPort=\"15\"/>\n      <infraRsSpAccGrp tDn=\"uni/infra/funcprof/spaccportgrp-SpineIPN_IntPolicyGroup\"/>\n    </infraSHPortS>\n  </infraSpAccPortP>"
+						},
+						"description": ""
+					},
+					"response": []
+				},
+				{
+					"name": "Spine_SwitchProfiles",
+					"request": {
+						"url": "https://172.26.42.21/api/node/mo/uni.xml",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<!-- APPLY THE INTERFACE PROFILE TO ALL THE SPINE SWITCHES  -->\n  <infraSpineP descr=\"\" dn=\"uni/infra/spprof-Spines\" name=\"Spines\" ownerKey=\"\" ownerTag=\"\">\n    <infraSpineS descr=\"\" name=\"Spines\" ownerKey=\"\" ownerTag=\"\" type=\"range\">\n      <infraNodeBlk descr=\"\" from_=\"201\" name=\"Spines\" to_=\"204\"/>\n    </infraSpineS>\n    <infraRsSpAccPortP tDn=\"uni/infra/spaccportprof-SpineIPN_IntProfile\"/>\n  </infraSpineP>"
+						},
+						"description": ""
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "De-commision Setup",
+			"description": "",
+			"item": [
+				{
+					"name": "DECOMMISSION NODES",
+					"request": {
+						"url": "https://172.26.42.21/api/node/mo/uni/fabric/outofsvc.xml",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<fabricOOServicePol>\r\n  <!-- DECOMMISSION DATA CENTER POD 2 -->\r\n  \r\n  <!-- REMOVE POD 2 LEAF SWITCHES -->\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-2/node-2001\" status=\"created,modified\" removeFromController=\"true\"/>\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-2/node-2002\" status=\"created,modified\" removeFromController=\"true\"/>\r\n    <!-- REMOVE POD 2 SPINE SWITCHES -->\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-2/node-201\" status=\"created,modified\" removeFromController=\"true\"/>\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-2/node-202\" status=\"created,modified\" removeFromController=\"true\"/>\r\n    \r\n    <!-- DECOMMISSION DATA CENTER POD 1 -->\r\n    \r\n    <!-- REMOVE POD 1 SPINE SWITCHES -->\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-1/node-203\" status=\"created,modified\" removeFromController=\"true\"/>\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-1/node-204\" status=\"created,modified\" removeFromController=\"true\"/>\r\n    <!-- REMOVE POD 1 LEAF SWITCHES -->\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-1/node-1004\" status=\"created,modified\" removeFromController=\"true\"/>\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-1/node-1003\" status=\"created,modified\" removeFromController=\"true\"/>\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-1/node-1002\" status=\"created,modified\" removeFromController=\"true\"/>\r\n    <fabricRsDecommissionNode tDn=\"topology/pod-1/node-1001\" status=\"created,modified\" removeFromController=\"true\"/>\r\n</fabricOOServicePol>"
+						},
+						"description": "RegisterNode"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "1_LOGIN",
+			"request": {
+				"url": "https://172.26.42.21/api/mo/aaaLogin.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "text/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<aaaUser name='admin' pwd='cisco123'/>"
+				},
+				"description": "LOGIN"
+			},
+			"response": []
+		},
+		{
+			"name": "2_REGISTER_NODES",
+			"request": {
+				"url": "https://172.26.42.21/api/node/mo/uni/controller.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "text/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<fabricNodeIdentPol>\r\n  <!-- DATA CENTER POD 1 NODES  -->\r\n    <fabricNodeIdentP  serial=\"SAL1824UNLZ\" name=\"203_pluto\" nodeId=\"203\" podId=\"1\" status=''/>\r\n    <fabricNodeIdentP  serial=\"SAL1824UNNQ\" name=\"204_sedna\" nodeId=\"204\" podId=\"1\" status=''/>\r\n    <fabricNodeIdentP  serial=\"FDO20231J1W\" name=\"1001_spencer\" nodeId=\"1001\" podId=\"1\" status=''/>\r\n    <fabricNodeIdentP  serial=\"FDO20231J0T\" name=\"1002_winnie\" nodeId=\"1002\" podId=\"1\" status=''/>\r\n    <fabricNodeIdentP  serial=\"SAL2003X3P9\" name=\"1003_buzz\" nodeId=\"1003\" podId=\"1\" status=''/>\r\n    <fabricNodeIdentP  serial=\"SAL2006Y5SP\" name=\"1004_rand\" nodeId=\"1004\" podId=\"1\" status=''/>\r\n    <!-- DATA CENTER POD 2 NODES  -->\r\n    <fabricNodeIdentP  serial=\"FOX2029GECY\" name=\"201_dc\" nodeId=\"201\" podId=\"2\" status=''/>\r\n    <fabricNodeIdentP  serial=\"FOX2030GHN0\" name=\"202_london\" nodeId=\"202\" podId=\"2\" status=''/>\r\n    <fabricNodeIdentP  serial=\"SAL2006Y5VM\" name=\"2001_copenhagen\" nodeId=\"2001\" podId=\"2\" status=''/>\r\n    <fabricNodeIdentP  serial=\"SAL2007YNW9\" name=\"2002_helsiniki\" nodeId=\"2002\" podId=\"2\" status=''/>\r\n    </fabricNodeIdentPol>"
+				},
+				"description": "RegisterNode"
+			},
+			"response": []
+		},
+		{
+			"name": "3_NODE_MGMT_IP",
+			"request": {
+				"url": "https://172.26.42.21/api/node/mo/uni.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "text/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<fvTenant descr=\"\" dn=\"uni/tn-mgmt\" name=\"mgmt\" ownerKey=\"\" ownerTag=\"\">\r\n    <mgmtMgmtP descr=\"\" name=\"default\" ownerKey=\"\" ownerTag=\"\">\r\n    <mgmtOoB descr=\"\" name=\"default\" prio=\"unspecified\">\r\n      <!-- POD 1 SPINE NODE MANAGEMENT -->\r\n      <mgmtRsOoBStNode addr=\"172.26.18.32/24\" gw=\"172.26.18.1\" tDn=\"topology/pod-1/node-203\" v6Addr=\"::\" v6Gw=\"::\"/>\r\n      <mgmtRsOoBStNode addr=\"172.26.18.31/24\" gw=\"172.26.18.1\" tDn=\"topology/pod-1/node-204\" v6Addr=\"::\" v6Gw=\"::\"/>\r\n      <!-- POD 1 LEAF NODE MANGEMENT-->\r\n      <mgmtRsOoBStNode addr=\"172.26.42.40/26\" gw=\"172.26.42.1\" tDn=\"topology/pod-1/node-1001\" v6Addr=\"::\" v6Gw=\"::\"/>\r\n      <mgmtRsOoBStNode addr=\"172.26.42.39/26\" gw=\"172.26.42.1\" tDn=\"topology/pod-1/node-1002\" v6Addr=\"::\" v6Gw=\"::\"/>\r\n      <mgmtRsOoBStNode addr=\"172.26.42.31/26\" gw=\"172.26.42.1\" tDn=\"topology/pod-1/node-1003\" v6Addr=\"::\" v6Gw=\"::\"/>\r\n      <mgmtRsOoBStNode addr=\"172.26.42.32/26\" gw=\"172.26.42.1\" tDn=\"topology/pod-1/node-1004\" v6Addr=\"::\" v6Gw=\"::\"/>\r\n      <!-- POD 2 SPINE NODE MANAGEMENT -->\r\n      <mgmtRsOoBStNode addr=\"172.26.33.68/27\" gw=\"172.26.33.65\" tDn=\"topology/pod-2/node-201\" v6Addr=\"::\" v6Gw=\"::\"/>\r\n      <mgmtRsOoBStNode addr=\"172.26.33.70/27\" gw=\"172.26.33.65\" tDn=\"topology/pod-2/node-202\" v6Addr=\"::\" v6Gw=\"::\"/>\r\n      <!-- POD 2 LEAF NODE MANAGEMENT -->\r\n      <mgmtRsOoBStNode addr=\"172.26.33.82/27\" gw=\"172.26.33.65\" tDn=\"topology/pod-2/node-2001\" v6Addr=\"::\" v6Gw=\"::\"/>\r\n      <mgmtRsOoBStNode addr=\"172.26.33.83/27\" gw=\"172.26.33.65\" tDn=\"topology/pod-2/node-2002\" v6Addr=\"::\" v6Gw=\"::\"/> \r\n      </mgmtOoB>\r\n  </mgmtMgmtP>\r\n</fvTenant>"
+				},
+				"description": "NodeMgmtIP"
+			},
+			"response": []
+		},
+		{
+			"name": "4_POD_POLICIES",
+			"request": {
+				"url": "https://172.26.42.21/api/node/mo/uni.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<fabricInst>\r\n<!-- POD POLICIES  -->\r\n    <!-- TIMEZONE  -->\r\n    <datetimeFormat dn=\"uni/fabric/format-default\" tz=\"n240_America-New_York\"/>\r\n  <!-- NTP Server -->\r\n  <datetimePol dn=\"uni/fabric/time-default\">\r\n    <datetimeNtpProv name=\"172.26.3.254\" descr=\"NTP@CPOC\" preferred=\"true\">\r\n        <datetimeRsNtpProvToEpg tDn=\"uni/tn-mgmt/mgmtp-default/oob-default\"/>\r\n    </datetimeNtpProv>\r\n  </datetimePol>\r\n  \r\n  <!-- BGP ROUTE REFLECTOR -->\r\n  <bgpInstPol name='default'>\r\n      <!--  BGP AS #  -->\r\n        <bgpAsP name='aspn' asn='65000'/>\r\n         <!--  RR Nodes  -->\r\n            <bgpRRP name='route-reflector'>\r\n                <bgpRRNodePEp id='201'/>\r\n                <bgpRRNodePEp id='202'/>\r\n                <bgpRRNodePEp id='203'/>\r\n                <bgpRRNodePEp id='204'/>\r\n             </bgpRRP>\r\n    </bgpInstPol>\r\n    \r\n<!-- POLICY GROUP  -->    \r\n  <fabricFuncP>\r\n    <fabricPodPGrp name=\"RR-PodPolicyGroup\">\r\n      <fabricRsPodPGrpBGPRRP tnBgpInstPolName=\"default\" />\r\n      <fabricRsTimePol tnDatetimePolName=\"default\" />\r\n      <fabricRsPodPGrpIsisDomP tnIsisDomPolName=\"default\" />\r\n      <fabricRsPodPGrpCoopP tnCoopPolName=\"default\" />\r\n      <fabricRsCommPol tnCommPolName=\"default\" />\r\n      <fabricRsSnmpPol tnSnmpPolName=\"default\" />\r\n    </fabricPodPGrp>\r\n  </fabricFuncP>\r\n\r\n<!-- APPLY POLICY GROUP --> \r\n\r\n  <fabricPodP name=\"default\">\r\n    <fabricPodS name=\"default\" type=\"ALL\">\r\n      <fabricRsPodPGrp tDn=\"uni/fabric/funcprof/podpgrp-RR-PodPolicyGroup\" />\r\n    </fabricPodS>\r\n  </fabricPodP>\r\n</fabricInst>\r\n\r\n"
+				},
+				"description": "L3 Infra"
+			},
+			"response": []
+		},
+		{
+			"name": "5_OSPF_POLICY",
+			"request": {
+				"url": "https://172.26.42.21/api/node/mo/uni.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "text/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<!-- OSPF POLICY FOR SPINE TO IPN ADJACENCY - IN THIS CURRENT VERSION OSPF MUST BE USED -->\n<ospfIfPol xmitDelay=\"1\" rexmitIntvl=\"5\" prio=\"1\" pfxSuppress=\"inherit\" ownerTag=\"\" ownerKey=\"\" nwT=\"p2p\" name=\"IPN_OSPFIntPolicy\" helloIntvl=\"10\" dn=\"uni/tn-infra/ospfIfPol-IPN_OSPFIntPolicy\" descr=\"\" deadIntvl=\"40\" ctrl=\"advert-subnet,mtu-ignore\" cost=\"unspecified\"/>"
+				},
+				"description": "OSPF Interface Policy for IPN"
+			},
+			"response": []
+		},
+		{
+			"name": "7_TEP_POOLs",
+			"request": {
+				"url": "https://172.26.42.21/api/policymgr/mo/uni/controller.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<fabricSetupPol status=''>\r\n  <!-- POD 1 TEPs -->\r\n    <fabricSetupP podId=\"1\" tepPool=\"10.0.0.0/16\" />\r\n    <!-- POD 2 TEPs -->\r\n    <fabricSetupP podId=\"2\" tepPool=\"10.1.0.0/16\" />\r\n</fabricSetupPol>\r\n\r\n"
+				},
+				"description": "TEPPOOL"
+			},
+			"response": []
+		},
+		{
+			"name": "8_IPN_L3OUT",
+			"request": {
+				"url": "https://172.26.42.21/api/node/mo/uni.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "text/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<polUni>\n\n<fvTenant descr=\"\" dn=\"uni/tn-infra\" name=\"infra\" ownerKey=\"\" ownerTag=\"\">\n\n   <l3extOut descr=\"\" enforceRtctrl=\"export\" name=\"multipod\" ownerKey=\"\" ownerTag=\"\" targetDscp=\"unspecified\" status=''>\n      <ospfExtP areaId='0' areaType='regular' status=''/>\n      <bgpExtP status='' />\n      <l3extRsEctx tnFvCtxName=\"overlay-1\"/>\n      <l3extProvLbl descr=\"\" name=\"prov_mp1\" ownerKey=\"\" ownerTag=\"\" tag=\"yellow-green\"/>\n\n      <l3extLNodeP name=\"POD1-lNode\">\n         <l3extRsNodeL3OutAtt rtrId=\"203.203.203.203\" rtrIdLoopBack=\"yes\" tDn=\"topology/pod-1/node-203\">\n            <l3extInfraNodeP descr=\"\" fabricExtCtrlPeering=\"yes\" name=\"\"/>\n         </l3extRsNodeL3OutAtt>\n         \n     <l3extRsNodeL3OutAtt rtrId=\"204.204.204.204\" rtrIdLoopBack=\"yes\" tDn=\"topology/pod-1/node-204\">\n            <l3extInfraNodeP descr=\"\" fabricExtCtrlPeering=\"yes\" name=\"\"/>\n         </l3extRsNodeL3OutAtt>\n\n         <l3extLIfP name='LIFp_v4'>\n            <l3extRsPathL3OutAtt descr='IPN' tDn=\"topology/pod-1/paths-203/pathep-[eth1/15]\" encap='vlan-4' ifInstT='sub-interface' addr=\"202.1.1.1/30\" />\n            <l3extRsPathL3OutAtt descr='IPN' tDn=\"topology/pod-1/paths-204/pathep-[eth1/15]\" encap='vlan-4' ifInstT='sub-interface' addr=\"202.1.1.5/30\" />\n           \n            \n           <ospfIfP>\n               <ospfRsIfPol tnOspfIfPolName='IPN_OSPFIntPolicy'/>\n           </ospfIfP>\n\n         </l3extLIfP>\n      </l3extLNodeP>\n\n      <l3extLNodeP name=\"POD2-lNode\">\n         <l3extRsNodeL3OutAtt rtrId=\"201.201.201.201\" rtrIdLoopBack=\"yes\" tDn=\"topology/pod-2/node-201\">\n            <l3extInfraNodeP descr=\"\" fabricExtCtrlPeering=\"yes\" name=\"\"/>\n         </l3extRsNodeL3OutAtt>\n         \n         <l3extRsNodeL3OutAtt rtrId=\"202.202.202.202\" rtrIdLoopBack=\"yes\" tDn=\"topology/pod-2/node-202\">\n            <l3extInfraNodeP descr=\"\" fabricExtCtrlPeering=\"yes\" name=\"\"/>\n         </l3extRsNodeL3OutAtt>\n         \n      <l3extLIfP name='LIFp_v4'>\n            <l3extRsPathL3OutAtt descr='IPN' tDn=\"topology/pod-2/paths-201/pathep-[eth1/15]\" encap='vlan-4' ifInstT='sub-interface' addr=\"201.1.1.1/30\" />\n            <l3extRsPathL3OutAtt descr='IPN' tDn=\"topology/pod-2/paths-202/pathep-[eth1/15]\" encap='vlan-4' ifInstT='sub-interface' addr=\"201.1.1.5/30\" />\n\n           \n           <ospfIfP>\n               <ospfRsIfPol tnOspfIfPolName='IPN_OSPFIntPolicy'/>\n           </ospfIfP>\n\n         </l3extLIfP>\n      </l3extLNodeP>\n      \n      <l3extInstP descr=\"\" matchT=\"AtleastOne\" name=\"instp1\" prio=\"unspecified\" targetDscp=\"unspecified\">\n          <fvRsCustQosPol tnQosCustomPolName=\"\"/>\n      </l3extInstP>\n      \n      <l3extRsL3DomAtt tDn=\"uni/l3dom-MultiPod_ExtL3Dom\"></l3extRsL3DomAtt>\n      \n   </l3extOut>\n\n <fvFabricExtConnP descr=\"\" id=\"1\" name=\"Fabric_Ext_Conn_Pol1\" rt=\"extended:as2-nn4:29:12\" status=''>\n      <fvPodConnP descr=\"this is dp-tep\" id=\"1\" name=\"\">\n         <fvIp addr=\"201.11.1.1/32\"/>\n      </fvPodConnP>\n      <fvPodConnP descr=\"this is dp-tep\" id=\"2\" name=\"\">\n         <fvIp addr=\"202.11.1.1/32\"/>\n      </fvPodConnP>\n      <fvPeeringP descr=\"\" name=\"\" ownerKey=\"\" ownerTag=\"\" type=\"automatic_with_full_mesh\"/>\n      <l3extFabricExtRoutingP descr=\"\" name=\"ext_routing_prof_1\" ownerKey=\"\" ownerTag=\"\">\n         <l3extSubnet aggregate=\"\" descr=\"\" ip=\"201.1.0.0/16\" name=\"\" scope=\"import-security\"/>\n         <l3extSubnet aggregate=\"\" descr=\"\" ip=\"202.1.0.0/16\" name=\"\" scope=\"import-security\"/>\n      </l3extFabricExtRoutingP>\n   </fvFabricExtConnP>\n\n  </fvTenant>\n</polUni>\n"
+				},
+				"description": "L3 Infra"
+			},
+			"response": []
+		},
+		{
+			"name": "9_Configure_EncryptionKeys-NO STRONG ENCRYPT",
+			"request": {
+				"url": "https://172.26.42.21/api/node/mo/.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "text/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<polUni>\n  <pkiExportEncryptionKey strongEncryptionEnabled=\"no\" passphrase=\"cisco123cisco123\" />\n</polUni>"
+				},
+				"description": "Confiugre Encryption Keys"
+			},
+			"response": []
+		},
+		{
+			"name": "9_Configure_EncryptionKeys-STRONG ENCRYPT",
+			"request": {
+				"url": "https://172.26.42.21/api/node/mo/.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "text/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<polUni>\n  <pkiExportEncryptionKey strongEncryptionEnabled=\"yes\" passphrase=\"C1sco123C1sco123\" />\n</polUni>"
+				},
+				"description": "Confiugre Encryption Keys"
+			},
+			"response": []
+		},
+		{
+			"name": "9_Configure_Backups",
+			"request": {
+				"url": "https://10.10.10.10/api/node/mo/.xml",
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "text/xml",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "<polUni>\n    <fabricInst>\n   \n    <fileRemotePath host=\"10.52.230.63\" name=\"CPOC-Z_Backups\" protocol=\"ftp\" remotePath=\"/FTP-TFTP/APIC-Backups/i08-fabric-01/\" remotePort=\"21\" userName=\"anonymous\" userPasswd=\"mypass@me.com\" descr=\"in Z drive in FTP-TFTP/APIC-Backups/i08-fabric-01/ folder\">\n        <fileRsARemoteHostToEpg tDn=\"uni/tn-mgmt/mgmtp-default/oob-default\">\n        </fileRsARemoteHostToEpg>\n    </fileRemotePath>\n    \n    <trigSchedP name=\"Daliy-CPOC\">\n        <trigRecurrWindowP name=\"Daily\" hour=\"2\"></trigRecurrWindowP>\n    </trigSchedP>\n    \n    <configExportP name=\"DailyToExteral\" descr=\"save backups on Z drive\" adminSt=\"triggered\">\n        \n        <configRsExportScheduler tnTrigSchedPName=\"Daliy-CPOC\">\n        </configRsExportScheduler>\n        \n        <configRsRemotePath tnFileRemotePathName=\"CPOC-Z_Backups\">\n        </configRsRemotePath>\n        \n    </configExportP>\n    \n    </fabricInst>\n</polUni>"
+				},
+				"description": "Daily backup of fabric to Z drive FTP-TFTP/APIC-backups/i02-fabric-01"
+			},
+			"response": []
+		}
+	]
+}
